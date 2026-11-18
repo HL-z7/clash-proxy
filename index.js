@@ -1,6 +1,14 @@
 import { settings, saveSettings } from './lib/settings.js'
 import { Kernel, GROUP_MAIN, ClashError, readSubscriptions } from './lib/mihomo.js'
-import { importSubscription, removeSubscription, refreshSubscriptions } from './lib/subscription.js'
+import {
+  importSubscription,
+  removeSubscription,
+  refreshSubscriptions,
+  displayName,
+  renameSubscription,
+  updateSubscription,
+  activateSubscription,
+} from './lib/subscription.js'
 import { createSession, destroyAllSessions, listSessions, mountPanel, ensureDashboard, PREFIX } from './lib/panel.js'
 
 const MODES = { 规则: 'rule', 全局: 'global', 直连: 'direct', rule: 'rule', global: 'global', direct: 'direct' }
@@ -326,37 +334,98 @@ export class ClashProxy extends (globalThis.plugin || class {}) {
   /** 无参列出订阅，url 导入，删 <名字|序号> 移除 */
   async runSubscription(e = this.e) {
     const cfg = await settings(this)
+    const ua = cfg.subscription?.userAgent || 'clash.meta'
     const arg = String(e.msg).replace(/^#代理订阅\s*/, '').trim()
+    const applyConfig = async () => {
+      const k = getKernel(cfg)
+      if (!(await refresh(cfg))) return false
+      await k.writeConfig(await readSubscriptions())
+      await k.reload().catch(() => {})
+      return true
+    }
     if (!arg) {
       const list = await readSubscriptions()
       if (!list.length) return e.reply('还没有订阅，用 #代理订阅 <订阅地址> 导入')
       return e.reply(
         [
           `订阅 ${list.length} 条：`,
-          ...list.map((s, i) => `${i + 1}. ${s.name} — ${s.count} 节点（${s.kind === 'clash' ? 'Clash 配置' : '分享链接'}）`),
+          ...list.map(
+            (s, i) =>
+              `${i + 1}. ${displayName(s)}${s.active === false ? '（未启用）' : '（使用中）'} — ${s.count} 节点（${s.kind === 'clash' ? 'Clash 配置' : '分享链接'}）`,
+          ),
+          '切换：#代理订阅 切 <名字或序号>',
+          '更新：#代理订阅 更新 [名字或序号]（不带参数更新全部）',
+          '改名：#代理订阅 改名 <名字或序号> <新名字>',
           '删除：#代理订阅 删 <名字或序号>',
         ].join('\n'),
       )
     }
+
+    const pick = async key => {
+      const list = await readSubscriptions()
+      return /^\d+$/.test(key) ? list[Number(key) - 1] : list.find(i => i.name === key || i.label === key)
+    }
+
+    if (/^切\s+/.test(arg)) {
+      const key = arg.replace(/^切\s+/, '').trim()
+      const target = await pick(key)
+      if (!target) return e.reply(`没有找到订阅「${key}」`)
+      await activateSubscription(target.name)
+      const applied = await applyConfig()
+      return e.reply(`已切换到订阅：${displayName(target)}（${target.count} 节点）${applied ? '，配置已重载' : '\n发 #代理开 启动后生效'}`)
+    }
+
+    if (/^更新(\s+|$)/.test(arg)) {
+      const key = arg.replace(/^更新\s*/, '').trim()
+      if (!key) {
+        const list = await readSubscriptions()
+        if (!list.length) return e.reply('还没有订阅')
+        const failed = []
+        for (const sub of list) {
+          try {
+            await updateSubscription(sub.name, ua)
+          } catch (err) {
+            failed.push(`${displayName(sub)}：${err.message}`)
+          }
+        }
+        const applied = await applyConfig()
+        return e.reply(
+          [`已更新 ${list.length - failed.length} 条订阅`, ...failed.map(f => `✖ ${f}`), applied ? '配置已重载' : ''].filter(Boolean).join('\n'),
+        )
+      }
+      const target = await pick(key)
+      if (!target) return e.reply(`没有找到订阅「${key}」`)
+      const info = await updateSubscription(target.name, ua)
+      const applied = await applyConfig()
+      return e.reply(`已更新订阅：${displayName(info)}，${info.count} 个节点${applied ? '，配置已重载' : ''}`)
+    }
+
+    if (/^改名\s+/.test(arg)) {
+      const m = arg.match(/^改名\s+(\S+)\s+([\s\S]+)$/)
+      if (!m) return e.reply('用法：#代理订阅 改名 <名字或序号> <新名字>')
+      const target = await pick(m[1])
+      if (!target) return e.reply(`没有找到订阅「${m[1]}」`)
+      const renamed = await renameSubscription(target.name, m[2].trim())
+      return e.reply(`已改名为：${displayName(renamed)}`)
+    }
+
     if (/^删\s+/.test(arg)) {
       const key = arg.replace(/^删\s+/, '').trim()
-      const list = await readSubscriptions()
-      const byIndex = /^\d+$/.test(key) ? list[Number(key) - 1] : null
-      const removed = await removeSubscription(byIndex?.name || key)
-      if (!removed) return e.reply(`没有找到订阅「${key}」`)
-      const k = getKernel(cfg)
-      if (await refresh(cfg)) await k.writeConfig(await readSubscriptions()).then(() => k.reload()).catch(() => {})
-      return e.reply(`已删除订阅：${removed.name}`)
+      const target = await pick(key)
+      if (!target) return e.reply(`没有找到订阅「${key}」`)
+      const removed = await removeSubscription(target.name)
+      await applyConfig()
+      return e.reply(`已删除订阅：${displayName(removed)}`)
     }
+
     if (!/^https?:\/\//i.test(arg)) return e.reply('订阅地址要以 http:// 或 https:// 开头')
-    const entry = await importSubscription(arg, { ua: cfg.subscription?.userAgent || 'clash.meta' })
-    const k = getKernel(cfg)
+    const entry = await importSubscription(arg, { ua })
     const running = await refresh(cfg)
     // 节点是内联进 config.yaml 的，只 reload 不会把新订阅算进去
-    if (running) await k.writeConfig(await readSubscriptions()).then(() => k.reload())
+    if (running) await applyConfig()
     return e.reply(
       [
-        `已导入订阅：${entry.name}`,
+        `已导入订阅：${displayName(entry)}`,
         `解析到 ${entry.count} 个节点（${entry.kind === 'clash' ? 'Clash 配置' : '分享链接'}）${entry.skipped ? `，跳过 ${entry.skipped} 条无法识别` : ''}`,
         running ? '已热重载配置，直接发 #代理测速 或 #代理节点 选节点' : '发 #代理开 启动后生效',
       ].join('\n'),
@@ -440,12 +509,26 @@ try {
   mountPanel(globalThis.Bot?.express, {
     client: () => active,
     subs: {
-      list: () => readSubscriptions(),
+      list: async () =>
+        (await readSubscriptions()).map(s => ({
+          name: s.name,
+          label: s.label || '',
+          count: s.count,
+          kind: s.kind,
+          active: s.active !== false,
+          updatedAt: s.updatedAt,
+        })),
       add: async (url, opts = {}) => {
         const cfg = await settings(pluginRef)
         return importSubscription(url, { ...opts, ua: cfg.subscription?.userAgent || 'clash.meta' })
       },
       remove: key => removeSubscription(key),
+      rename: (key, label) => renameSubscription(key, label),
+      update: async key => {
+        const cfg = await settings(pluginRef)
+        return updateSubscription(key, cfg.subscription?.userAgent || 'clash.meta')
+      },
+      activate: key => activateSubscription(key),
       /** 节点是内联进 config.yaml 的，加完订阅必须重写再 reload，只 reload 等于没变 */
       reload: async () => {
         const cfg = await settings(pluginRef)
