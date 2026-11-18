@@ -1,4 +1,4 @@
-import { settings } from './lib/settings.js'
+import { settings, saveSettings } from './lib/settings.js'
 import { Kernel, GROUP_MAIN, ClashError, readSubscriptions } from './lib/mihomo.js'
 import { importSubscription, removeSubscription, refreshSubscriptions } from './lib/subscription.js'
 import { createSession, destroyAllSessions, listSessions, mountPanel, ensureDashboard, PREFIX } from './lib/panel.js'
@@ -105,6 +105,7 @@ export class ClashProxy extends (globalThis.plugin || class {}) {
         { reg: '^#代理(?:关|关闭|停止)$', fnc: 'close', permission: 'master' },
         { reg: '^#代理(?:状态|信息)$', fnc: 'status', permission: 'master' },
         { reg: '^#代理模式(?:\\s*([\\s\\S]+))?$', fnc: 'mode', permission: 'master' },
+        { reg: '^#代理tun(?:\\s*(开|关|on|off|true|false|1|0))?$', fnc: 'tun', permission: 'master' },
         { reg: '^#代理节点(?:\\s*([\\s\\S]+))?$', fnc: 'node', permission: 'master' },
         { reg: '^#代理测速(?:\\s*([\\s\\S]+))?$', fnc: 'speedtest', permission: 'master' },
         { reg: '^#代理订阅(?:\\s*([\\s\\S]+))?$', fnc: 'subscription', permission: 'master' },
@@ -222,6 +223,37 @@ export class ClashProxy extends (globalThis.plugin || class {}) {
       if (now && proxies[now] && !GROUP_TYPES.has(proxies[now].type)) await k.client.select('GLOBAL', now).catch(() => {})
     }
     return e.reply(`已切换到${MODE_TEXT[wanted]}模式`)
+  }
+
+  /**
+   * TUN 模式：把本机全部流量（含 git、ssh 这类不认环境变量的程序）接管进内核。
+   * 改的是配置文件里的字段，切完要重建配置并重启内核，TUN 只在启动时生效。
+   */
+  async runTun(e = this.e) {
+    const cfg = await settings(this)
+    const arg = String(e.msg).replace(/^#代理tun\s*/, '').trim()
+    let on
+    if (/^(开|on|true|1)$/i.test(arg)) on = true
+    else if (/^(关|off|false|0)$/i.test(arg)) on = false
+    else on = !cfg.core?.tun
+    if (on === !!cfg.core?.tun) return e.reply(on ? 'TUN 已经开着' : 'TUN 已经关着')
+    const k = getKernel(cfg)
+    const running = await refresh(cfg)
+    if (on && process.platform === 'win32') return e.reply('Windows 上要用 TUN 得先装 wintun 驱动，暂不支持一键开启')
+    cfg.core.tun = on
+    await saveSettings(this)
+    if (!running) return e.reply(on ? 'TUN 已写入配置，发 #代理开 启动后生效' : 'TUN 已在配置里关闭')
+    await e.reply(on ? '正在开启 TUN：重建配置并重启内核，代理会断几秒' : '正在关闭 TUN：重建配置并重启内核')
+    await k.stop()
+    await new Promise(r => setTimeout(r, 800))
+    await k.writeConfig(await readSubscriptions())
+    const info = await k.start()
+    active = { port: cfg.core.controllerPort, secret: k.client.secret }
+    return e.reply(
+      on
+        ? `TUN 已开启（内核 ${info.version || '已就绪'}），本机所有程序都会走代理；要恢复发 #代理tun 关`
+        : 'TUN 已关闭，只有手动指向 127.0.0.1 端口或配了环境变量的程序走代理',
+    )
   }
 
   /** 不带关键字时列出主分组里可选的节点，带上就直接切过去 */
@@ -376,6 +408,10 @@ export class ClashProxy extends (globalThis.plugin || class {}) {
 
   async mode(e = this.e) {
     return safe(e, () => this.runMode(e))
+  }
+
+  async tun(e = this.e) {
+    return safe(e, () => this.runTun(e))
   }
 
   async node(e = this.e) {
