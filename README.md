@@ -68,9 +68,10 @@ data/clash-proxy/
 ├── providers/*.yaml     各订阅解析后的节点
 ├── subscriptions.json   订阅列表
 ├── panel/               面板静态文件
-├── geoip.metadb         地理库（预下载，避免内核直连 GitHub 卡住）
 └── mihomo.log
 ```
+
+生成的规则只用私网 CIDR + `MATCH`，**不用 GEOIP/GEOSITE**：那要内核去下 8MB 的 `geoip.metadb`，国内首启会卡在 “Can't find MMDB” 一直起不来。要加分流规则自己写 `IP-CIDR`/`DOMAIN-SUFFIX`。
 
 节点是内联进 `config.yaml` 的，不用 `proxy-providers`：mihomo 的 `/proxies` 不返回 provider 里的节点，测速和按节点切换都会拿不到（`/providers/proxies/{name}/delay` 也不支持单节点测试）。
 
