@@ -4,6 +4,15 @@
 
 控制器只监听 `127.0.0.1`，面板走机器人自己的端口，用一次性 token 反代；token 过期或发 `#代理下线` 后链接立刻失效，不会把一个免密的 Clash 面板暴露在公网。
 
+## 安装
+
+```bash
+cd <机器人根目录>
+git clone https://gitee.com/fox-glaze/clash-proxy.git plugins/clash-proxy
+```
+
+不需要装依赖（只用框架自带的 `express`/`ws`/`yaml`），重启机器人即可。Linux 服务器上发 `#代理部署` 会自己下内核，不用手动装 mihomo。
+
 ## 指令
 
 | 指令 | 说明 |
