@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>订阅管理</title>
+<style>
+  :root { color-scheme: dark; --bg:#0f1115; --card:#171a21; --line:#262b35; --text:#e6e9ef; --dim:#8b93a3; --accent:#4f8cff; --danger:#ff6b6b; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:24px 16px 48px; background:var(--bg); color:var(--text); font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  header { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:16px; }
+  h1 { font-size:18px; margin:0; font-weight:600; }
+  h2 { font-size:14px; margin:0 0 10px; color:var(--dim); font-weight:600; }
+  a { color:var(--accent); text-decoration:none; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:14px; }
+  form { display:flex; gap:8px; flex-wrap:wrap; }
+  input { flex:1 1 260px; min-width:0; background:#0d1016; border:1px solid var(--line); color:var(--text); border-radius:8px; padding:9px 11px; font-size:13px; }
+  input:focus { outline:none; border-color:var(--accent); }
+  button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:9px 16px; font-size:13px; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  ul { list-style:none; margin:0; padding:0; }
+  li { display:flex; align-items:center; gap:10px; padding:10px 0; border-top:1px solid var(--line); }
+  li:first-child { border-top:0; }
+  .name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .meta { color:var(--dim); font-size:12px; white-space:nowrap; }
+  .del { background:transparent; border:1px solid var(--line); color:var(--danger); padding:5px 10px; font-size:12px; }
+  .msg { margin:10px 0 0; font-size:13px; min-height:20px; }
+  .msg.err { color:var(--danger); }
+  .msg.ok { color:#5ad18a; }
+  .empty { color:var(--dim); font-size:13px; }
+  footer { color:var(--dim); font-size:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>订阅管理</h1>
+    <a href="./" id="back">返回面板 →</a>
+  </header>
+
+  <section class="card">
+    <form id="form">
+      <input id="url" placeholder="https:// 订阅地址（Clash 配置或分享链接）" autocomplete="off" spellcheck="false">
+      <input id="label" placeholder="备注（可选）" autocomplete="off" style="flex:0 1 140px">
+      <button id="submit" type="submit">导入</button>
+    </form>
+    <p class="msg" id="msg"></p>
+  </section>
+
+  <section class="card">
+    <h2>已有订阅</h2>
+    <ul id="list"></ul>
+  </section>
+
+  <footer id="status">加载中…</footer>
+</div>
+
+<script>
+(function () {
+  var API = location.pathname.replace(/\/+$/, '') + '/subs'
+  var $ = function (id) { return document.getElementById(id) }
+  var msg = $('msg')
+
+  function show(text, kind) {
+    msg.textContent = text || ''
+    msg.className = 'msg' + (kind ? ' ' + kind : '')
+  }
+
+  function render(data) {
+    var list = $('list')
+    list.innerHTML = ''
+    var subs = (data && data.subs) || []
+    if (!subs.length) {
+      var li = document.createElement('li')
+      li.className = 'empty'
+      li.textContent = '还没有订阅，先在上面粘贴一条订阅地址'
+      list.appendChild(li)
+    }
+    subs.forEach(function (sub) {
+      var li = document.createElement('li')
+      var name = document.createElement('span')
+      name.className = 'name'
+      name.textContent = sub.name
+      name.title = sub.name
+      var meta = document.createElement('span')
+      meta.className = 'meta'
+      meta.textContent = sub.count + ' 节点 · ' + (sub.kind === 'clash' ? 'Clash' : '分享链接')
+      var del = document.createElement('button')
+      del.className = 'del'
+      del.textContent = '删除'
+      del.onclick = function () { remove(sub.name, del) }
+      li.appendChild(name); li.appendChild(meta); li.appendChild(del)
+      list.appendChild(li)
+    })
+    var st = (data && data.status) || {}
+    $('status').textContent = st.version
+      ? '内核 ' + st.version + ' · 模式 ' + (st.mode || '-') + ' · 节点 ' + (st.nodes ?? '-') + ' 个'
+      : '内核未运行'
+  }
+
+  async function load() {
+    try {
+      var res = await fetch(API, { headers: { accept: 'application/json' } })
+      var data = await res.json()
+      if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status))
+      render(data)
+    } catch (err) {
+      show(err.message || String(err), 'err')
+      $('status').textContent = '加载失败'
+    }
+  }
+
+  async function remove(key, btn) {
+    if (!confirm('删除订阅「' + key + '」？')) return
+    btn.disabled = true
+    try {
+      var res = await fetch(API + '/delete', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key: key }) })
+      var data = await res.json()
+      if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status))
+      show('已删除：' + data.removed, 'ok')
+      render({ subs: data.subs, status: undefined })
+      await load()
+    } catch (err) {
+      show(err.message || String(err), 'err')
+      btn.disabled = false
+    }
+  }
+
+  $('form').onsubmit = async function (ev) {
+    ev.preventDefault()
+    var url = $('url').value.trim()
+    if (!url) return show('先粘贴订阅地址', 'err')
+    $('submit').disabled = true
+    show('正在拉取订阅…')
+    try {
+      var res = await fetch(API, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: url, label: $('label').value.trim() }) })
+      var data = await res.json()
+      if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status))
+      $('url').value = ''
+      $('label').value = ''
+      show('已导入 ' + data.entry.name + '，' + data.entry.count + ' 个节点，配置已重载', 'ok')
+      render({ subs: data.subs, status: data.status })
+    } catch (err) {
+      show(err.message || String(err), 'err')
+    } finally {
+      $('submit').disabled = false
+    }
+  }
+
+  load()
+})()
+</script>
+</body>
+</html>

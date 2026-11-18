@@ -11,6 +11,8 @@ const BUILTIN = new Set(['DIRECT', 'REJECT', 'PASS', 'COMPATIBLE', 'GLOBAL'])
 let kernel = null
 /** 内核就绪时缓存 {port, secret}，面板反代每次请求都要用，不能每次都去探活 */
 let active = null
+/** 面板的订阅接口要拿配置，而 settings() 需要插件实例；模块级保存一份最近的 */
+let pluginRef = null
 
 function getKernel(cfg) {
   kernel ??= new Kernel(cfg)
@@ -113,6 +115,7 @@ export class ClashProxy extends (globalThis.plugin || class {}) {
   }
 
   onLoad() {
+    pluginRef = this
     /** 探测内核是否已在跑，不阻塞插件加载 */
     settings(this).then(cfg => refresh(cfg)).catch(() => {})
   }
@@ -338,7 +341,8 @@ export class ClashProxy extends (globalThis.plugin || class {}) {
     const url = `${panelBase(cfg)}${PREFIX}/${token}/`
     const text = [
       `临时面板已生成（${fmtLeft(expiresAt - Date.now())}内有效）：`,
-      url,
+      `面板：${url}`,
+      `订阅管理：${url}manage`,
       '链接只在本次会话有效，过期或 #代理下线 后立刻失效。',
     ].join('\n')
     if (e.isGroup) {
@@ -399,6 +403,33 @@ export class ClashProxy extends (globalThis.plugin || class {}) {
 try {
   mountPanel(globalThis.Bot?.express, {
     client: () => active,
+    subs: {
+      list: () => readSubscriptions(),
+      add: async (url, opts = {}) => {
+        const cfg = await settings(pluginRef)
+        return importSubscription(url, { ...opts, ua: cfg.subscription?.userAgent || 'clash.meta' })
+      },
+      remove: key => removeSubscription(key),
+      /** 节点是内联进 config.yaml 的，加完订阅必须重写再 reload，只 reload 等于没变 */
+      reload: async () => {
+        const cfg = await settings(pluginRef)
+        const k = getKernel(cfg)
+        await k.writeConfig(await readSubscriptions())
+        if (await refresh(cfg)) await k.reload()
+      },
+      status: async () => {
+        const cfg = await settings(pluginRef)
+        const info = await refresh(cfg).catch(() => null)
+        if (!info) return { running: false }
+        const k = getKernel(cfg)
+        const [configs, proxies] = await Promise.all([
+          k.client.configs().catch(() => ({})),
+          k.client.proxies().catch(() => ({ proxies: {} })),
+        ])
+        const nodes = Object.values(proxies.proxies || {}).filter(p => !BUILTIN.has(p.name) && !GROUP_TYPES.has(p.type)).length
+        return { running: true, version: info.version, mode: MODE_TEXT[configs.mode] || configs.mode, nodes }
+      },
+    },
   })
 } catch (err) {
   globalThis.logger?.error?.(`[clash-proxy] 挂载临时面板失败：${err.message}`)

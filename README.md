@@ -75,6 +75,15 @@ data/clash-proxy/
 
 节点是内联进 `config.yaml` 的，不用 `proxy-providers`：mihomo 的 `/proxies` 不返回 provider 里的节点，测速和按节点切换都会拿不到（`/providers/proxies/{name}/delay` 也不支持单节点测试）。
 
+## 面板
+
+`#代理web` 会一起给出两个地址，同一个临时 token：
+
+- `/pp/<token>/` — zashboard，看连接、切节点、切模式、看流量
+- `/pp/<token>/manage` — 订阅管理：粘贴订阅地址导入、列出现有订阅、删除
+
+订阅管理页走的是插件自己的接口（`/pp/<token>/manage/subs`），导入后会把节点重新写进 `config.yaml` 再热重载，等于面板里直接完成 `#代理订阅` 那一步。节点选择仍在 zashboard 的 Proxies 页。
+
 ## 面板安全
 
 - 控制器 `external-controller: 127.0.0.1:<port>`，公网摸不到。
