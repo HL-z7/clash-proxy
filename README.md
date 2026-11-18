@@ -6,10 +6,22 @@
 
 ## 安装
 
+仓库地址：[GitHub](https://github.com/HL-z7/clash-proxy) · [Gitee 镜像](https://gitee.com/fox-glaze/clash-proxy)
+
 ```bash
 cd <机器人根目录>
+
+# GitHub
+git clone https://github.com/HL-z7/clash-proxy.git plugins/clash-proxy
+
+# GitHub 拉不动时套一层加速代理，仓库路径原样拼在后面
+git clone https://gh-proxy.com/https://github.com/HL-z7/clash-proxy.git plugins/clash-proxy
+
+# 国内直连更稳的镜像
 git clone https://gitee.com/fox-glaze/clash-proxy.git plugins/clash-proxy
 ```
+
+加速前缀只对公开仓库有效，失效了换 `https://ghfast.top/` 或 `https://ghproxy.net/` 试。
 
 不需要装依赖（只用框架自带的 `express`/`ws`/`yaml`），重启机器人即可。Linux 服务器上发 `#代理部署` 会自己下内核，不用手动装 mihomo。
 
