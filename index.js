@@ -102,11 +102,11 @@ export class ClashProxy extends (globalThis.plugin || class {}) {
         { reg: '^#代理(?:开|开启|启动)$', fnc: 'open', permission: 'master' },
         { reg: '^#代理(?:关|关闭|停止)$', fnc: 'close', permission: 'master' },
         { reg: '^#代理(?:状态|信息)$', fnc: 'status', permission: 'master' },
-        { reg: '^#代理模式(?:\\s+(\\S+))?$', fnc: 'mode', permission: 'master' },
-        { reg: '^#代理节点(?:\\s+([\\s\\S]+))?$', fnc: 'node', permission: 'master' },
-        { reg: '^#代理测速(?:\\s+([\\s\\S]+))?$', fnc: 'speedtest', permission: 'master' },
-        { reg: '^#代理订阅(?:\\s+([\\s\\S]+))?$', fnc: 'subscription', permission: 'master' },
-        { reg: '^#代理web(?:\\s+(\\d+))?$', fnc: 'web', permission: 'master' },
+        { reg: '^#代理模式(?:\\s*([\\s\\S]+))?$', fnc: 'mode', permission: 'master' },
+        { reg: '^#代理节点(?:\\s*([\\s\\S]+))?$', fnc: 'node', permission: 'master' },
+        { reg: '^#代理测速(?:\\s*([\\s\\S]+))?$', fnc: 'speedtest', permission: 'master' },
+        { reg: '^#代理订阅(?:\\s*([\\s\\S]+))?$', fnc: 'subscription', permission: 'master' },
+        { reg: '^#代理web(?:\\s*(\\d+))?$', fnc: 'web', permission: 'master' },
         { reg: '^#代理下线$', fnc: 'offline', permission: 'master' },
       ],
     })
@@ -204,7 +204,7 @@ export class ClashProxy extends (globalThis.plugin || class {}) {
 
   async runMode(e = this.e) {
     const cfg = await settings(this)
-    const wanted = MODES[String(e.msg).trim().split(/\s+/)[1] || '']
+    const wanted = MODES[String(e.msg).replace(/^#代理模式\s*/, '').trim()]
     const k = await requireRunning(cfg)
     if (!wanted) {
       const configs = await k.client.configs().catch(() => ({}))

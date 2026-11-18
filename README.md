@@ -28,7 +28,7 @@ git clone https://gitee.com/fox-glaze/clash-proxy.git plugins/clash-proxy
 | `#代理web [分钟]` | 生成临时面板链接；群里发会改成私聊发送 |
 | `#代理下线` | 销毁全部临时面板，已发出的链接立即失效 |
 
-全部指令仅主人可用。
+全部指令仅主人可用。指令和参数之间的空格可省略，`#代理订阅https://…`、`#代理模式全局` 都认。
 
 ## 配置
 
