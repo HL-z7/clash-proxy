@@ -78,12 +78,9 @@ data/clash-proxy/
 
 ## 面板
 
-`#代理web` 会一起给出两个地址，同一个临时 token：
+`#代理web` 只给一个临时地址 `/pp/<token>/`，里面就是 zashboard（看连接、切节点、切模式、看流量）。右下角有个「订阅」按钮，点开是订阅管理浮层：粘贴订阅地址导入、列出现有订阅、删除。
 
-- `/pp/<token>/` — zashboard，看连接、切节点、切模式、看流量
-- `/pp/<token>/manage` — 订阅管理：粘贴订阅地址导入、列出现有订阅、删除
-
-订阅管理页走的是插件自己的接口（`/pp/<token>/manage/subs`），导入后会把节点重新写进 `config.yaml` 再热重载，等于面板里直接完成 `#代理订阅` 那一步。节点选择仍在 zashboard 的 Proxies 页。
+订阅管理走的是插件自己的接口（`/pp/<token>/manage/subs`），导入后会把节点重新写进 `config.yaml` 再热重载，等于面板里直接完成 `#代理订阅` 那一步。节点选择仍在 zashboard 的 Proxies 页。
 
 ## 面板安全
 

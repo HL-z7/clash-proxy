@@ -373,8 +373,8 @@ export class ClashProxy extends (globalThis.plugin || class {}) {
     const url = `${panelBase(cfg)}${PREFIX}/${token}/`
     const text = [
       `临时面板已生成（${fmtLeft(expiresAt - Date.now())}内有效）：`,
-      `面板：${url}`,
-      `订阅管理：${url}manage`,
+      url,
+      '右下角「订阅」按钮可导入和管理订阅。',
       '链接只在本次会话有效，过期或 #代理下线 后立刻失效。',
     ].join('\n')
     if (e.isGroup) {

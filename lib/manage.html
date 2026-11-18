@@ -63,6 +63,14 @@
   var $ = function (id) { return document.getElementById(id) }
   var msg = $('msg')
 
+  /** 面板里是以浮层 iframe 打开的，点「关闭」通知父页面收起，别在 iframe 里跳走 */
+  if (window.parent !== window) {
+    var back = $('back')
+    back.textContent = '关闭 ✕'
+    back.href = 'javascript:void(0)'
+    back.onclick = function () { window.parent.postMessage('pp-subs-close', '*') }
+  }
+
   function show(text, kind) {
     msg.textContent = text || ''
     msg.className = 'msg' + (kind ? ' ' + kind : '')
